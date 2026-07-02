@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OCR-Терминал</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell" aria-live="polite">
+      <section class="screen screen-start is-active" data-screen="start">
+        <div class="brand-panel">
+          <div>
+            <h1>Стойка самообслуживания</h1>
+          </div>
+        </div>
+
+        <div class="start-layout">
+          <div class="instruction-panel">
+            <h2>Сканирование паспорта РФ</h2>
+            <p>
+              Разместите разворот паспорта перед фото-сканером. После распознавания
+              проверьте ФИО, дату рождения, серию и номер документа.
+            </p>
+
+            <ol class="steps-list">
+              <li>Подтвердите согласие на обработку персональных данных.</li>
+              <li>Разместите паспорт перед камерой на экране сканирования.</li>
+              <li>Нажмите «Сканировать» и дождитесь результата OCR.</li>
+              <li>Подтвердите данные или выполните пересъёмку.</li>
+            </ol>
+          </div>
+
+          <div class="consent-panel">
+            <h2>Согласие</h2>
+            <p>
+              Данные паспорта используются только для текущего сценария регистрации
+              или выдачи пропуска. После завершения сессии изображение и результат
+              очищаются с экрана терминала.
+            </p>
+
+            <label class="consent-check">
+              <input id="consentInput" type="checkbox" />
+              <span>Я согласен на обработку персональных данных</span>
+            </label>
+
+            <button id="continueButton" class="primary-action" type="button">
+              Продолжить
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="scan">
+        <header class="top-bar">
+          <div>
+            <p class="eyebrow">Шаг 2 из 3</p>
+            <h1>Разместите паспорт перед камерой</h1>
+          </div>
+          <div class="status-strip">
+            <button id="backToStartButton" class="ghost-button" type="button">Назад</button>
+          </div>
+        </header>
+
+        <div class="scan-workspace">
+          <div class="camera-stage">
+            <video id="cameraVideo" autoplay playsinline muted></video>
+            <img id="stillPreview" class="still-preview" alt="Снимок паспорта" />
+            <div id="cameraMessage" class="camera-message">
+              Ожидание доступа к камере
+            </div>
+          </div>
+
+          <aside class="scan-controls">
+            <button id="scanButton" class="primary-action" type="button">
+              Сканировать
+            </button>
+
+            <div class="scan-note">
+              <strong>Подсказка:</strong>
+              паспорт должен быть полностью виден в кадре, без бликов и сильного наклона.
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="processing">
+        <div class="processing-layout">
+          <div class="progress-ring" aria-hidden="true"></div>
+          <p class="eyebrow">Шаг 3 из 3</p>
+          <h1>Распознаём данные</h1>
+          <p id="processingText" hidden></p>
+          <span id="jobIdLabel" class="job-label"></span>
+          <button id="cancelButton" class="secondary-action" type="button">
+            Отменить
+          </button>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="result">
+        <header class="top-bar">
+          <div>
+            <p class="eyebrow">Проверка данных</p>
+            <h1>Проверьте распознанные поля</h1>
+          </div>
+          <span id="confidenceBadge" class="status-pill">Уверенность</span>
+        </header>
+
+        <div class="result-layout">
+          <div id="resultFields" class="fields-grid"></div>
+          <aside class="result-side">
+            <div id="resultMeta" class="meta-list"></div>
+            <button id="confirmButton" class="primary-action" type="button">
+              Всё верно
+            </button>
+            <button id="retakeButton" class="secondary-action" type="button">
+              Переснять
+            </button>
+          </aside>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="error">
+        <div class="error-layout">
+          <h1 id="errorText">Не удалось распознать, попробуйте ещё раз.</h1>
+          <div class="error-actions">
+            <button id="errorRetakeButton" class="primary-action" type="button">
+              Переснять
+            </button>
+            <button id="errorHomeButton" class="secondary-action" type="button">
+              На старт
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div id="idleModal" class="modal-backdrop" hidden>
+      <div class="modal-window" role="dialog" aria-modal="true" aria-labelledby="idleTitle">
+        <h2 id="idleTitle">Сессия будет очищена</h2>
+        <p>
+          Продолжите работу, если вы ещё проверяете данные. При отсутствии действий
+          терминал вернётся на стартовый экран.
+        </p>
+        <button id="stayButton" class="primary-action" type="button">Продолжить</button>
+      </div>
+    </div>
+
+    <canvas id="captureCanvas" hidden></canvas>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

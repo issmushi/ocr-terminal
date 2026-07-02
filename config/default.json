@@ -1,0 +1,19 @@
+{
+  "apiBaseUrl": "http://192.168.3.113:8000",
+  "window": {
+    "startMode": "fullscreen",
+    "fullscreen": true,
+    "kiosk": false
+  },
+  "pollIntervalMs": 1500,
+  "maxFileSizeMb": 75,
+  "sessionTimeoutMs": 120000,
+  "idleWarningMs": 90000,
+  "camera": {
+    "preferredFacingMode": "environment",
+    "width": 1280,
+    "height": 720
+  },
+  "debugSaveEnabled": false,
+  "logsPath": "./logs"
+}

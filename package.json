@@ -1,0 +1,21 @@
+{
+  "name": "ocr-terminal",
+  "version": "1.0.0",
+  "description": "Electron frontend for OCR terminal passport scanning",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "check": "node --check electron/main.js && node --check electron/preload.js && node --check src/renderer.js"
+  },
+  "keywords": [
+    "electron",
+    "ocr",
+    "terminal",
+    "passport"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "^31.7.7"
+  }
+}
