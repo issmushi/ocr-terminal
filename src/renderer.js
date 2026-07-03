@@ -427,6 +427,7 @@
   }
 
   function syncConsentState() {
+    continueButton.disabled = !consentInput.checked;
     continueButton.setAttribute(
       "aria-label",
       consentInput.checked ? "Продолжить" : "Принять согласие и продолжить"
@@ -436,7 +437,9 @@
   consentInput.addEventListener("change", syncConsentState);
 
   continueButton.addEventListener("click", async () => {
-    consentInput.checked = true;
+    if (!consentInput.checked) {
+      return;
+    }
     syncConsentState();
     showScreen("scan");
     try {

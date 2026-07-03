@@ -163,6 +163,11 @@ li {
   flex-direction: column;
 }
 
+.consent-text {
+  font-size: 19px;
+  line-height: 1.42;
+}
+
 .consent-check {
   display: grid;
   grid-template-columns: 34px 1fr;
