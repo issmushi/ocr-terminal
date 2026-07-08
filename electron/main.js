@@ -4,6 +4,15 @@ const fs = require("fs");
 
 const defaultConfig = {
   apiBaseUrl: "http://192.168.3.113:8000",
+  asbp: {
+    mainUrl: "http://192.168.3.113:8000",
+    externalPassPath: "/api/v1/external_pass",
+    rfidPathTemplate: "/api/v1/pass/{pass_id}/rfid",
+    terminalToken: ""
+  },
+  dispenser: {
+    cardUrl: "http://192.168.3.159:8082/card"
+  },
   window: {
     startMode: "fullscreen",
     fullscreen: true,

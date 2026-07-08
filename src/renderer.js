@@ -1,6 +1,15 @@
 (async () => {
   const fallbackConfig = {
     apiBaseUrl: "http://192.168.3.113:8000",
+    asbp: {
+      mainUrl: "http://192.168.3.113:8000",
+      externalPassPath: "/api/v1/external_pass",
+      rfidPathTemplate: "/api/v1/pass/{pass_id}/rfid",
+      terminalToken: ""
+    },
+    dispenser: {
+      cardUrl: "http://192.168.3.159:8082/card"
+    },
     pollIntervalMs: 1500,
     maxFileSizeMb: 75,
     sessionTimeoutMs: 120000,
@@ -32,6 +41,7 @@
   const resultMeta = document.querySelector("#resultMeta");
   const confidenceBadge = document.querySelector("#confidenceBadge");
   const confirmButton = document.querySelector("#confirmButton");
+  const passStatusMessage = document.querySelector("#passStatusMessage");
   const retakeButton = document.querySelector("#retakeButton");
   const errorText = document.querySelector("#errorText");
   const errorRetakeButton = document.querySelector("#errorRetakeButton");
@@ -44,6 +54,7 @@
   let pollTimer = null;
   let idleWarningTimer = null;
   let idleResetTimer = null;
+  let lastPassportData = null;
 
   const genericRecognitionError = "Не удалось распознать, попробуйте ещё раз.";
   const terminalStatuses = new Set(["done", "failed", "timeout", "cancelled"]);
@@ -318,6 +329,8 @@
     const data = getPassport(payload);
     const meta = getResponseMeta(payload);
     const task = getTask(payload);
+    lastPassportData = data;
+    resetPassStatus();
 
     resultFields.innerHTML = "";
     fieldLabels.forEach(([key, label, wide]) => {
@@ -339,6 +352,226 @@
     addMetaRow("Источник", meta.source || "нет данных");
     addMetaRow("Качество", imageQualityText(meta.image_quality));
     addMetaRow("Задача", (task?.job_id || getJobId(payload)).slice(0, 8));
+  }
+
+  async function receivePass() {
+    if (!lastPassportData) {
+      setPassStatus("Сначала распознайте паспорт.", "danger");
+      return;
+    }
+
+    const series = onlyDigits(lastPassportData.passport_series);
+    const number = onlyDigits(lastPassportData.passport_number);
+
+    if (!series || !number) {
+      setPassStatus("Не удалось получить серию и номер паспорта. Выполните пересъёмку.", "danger");
+      return;
+    }
+
+    const previousText = confirmButton.textContent;
+    confirmButton.disabled = true;
+    confirmButton.textContent = "Ищем пропуск";
+    setPassStatus("Ищем пропуск по данным паспорта.", "");
+
+    try {
+      const pass = await findExternalPass({ series, number });
+
+      if (!pass) {
+        setPassStatus("Действующий пропуск не найден.", "danger");
+        return;
+      }
+
+      if (getPassRfid(pass)) {
+        setPassStatus("Пропуск уже выдан.", "warning");
+        return;
+      }
+
+      setPassStatus("Пропуск найден. Получаем карту.", "");
+      confirmButton.textContent = "Получаем карту";
+      const rfid = await getCardFromDispenser();
+
+      confirmButton.textContent = "Привязываем карту";
+      await assignRfidToPass(pass, rfid);
+
+      setPassStatus("Пропуск выдан.", "");
+      await resetSession();
+    } catch (error) {
+      setPassStatus("Не удалось получить пропуск. Попробуйте ещё раз.", "danger");
+    } finally {
+      confirmButton.disabled = false;
+      confirmButton.textContent = previousText;
+    }
+  }
+
+  async function findExternalPass({ series, number }) {
+    const passApi = getPassApiConfig();
+
+    if (!passApi.token) {
+      throw new Error("Terminal token is not configured.");
+    }
+
+    const url = new URL(passApi.externalPassPath, ensureTrailingSlash(passApi.mainUrl));
+    url.searchParams.set("order_by", "-id");
+    url.searchParams.set("pass_info__series", series);
+    url.searchParams.set("pass_info__number", number);
+
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${passApi.token}`,
+        Accept: "application/json"
+      }
+    });
+
+    const payload = await readJsonResponse(response, "Поиск пропуска");
+    const passes = extractPasses(payload);
+    const availablePasses = passes.filter((pass) => {
+      const status = getPassStatus(pass);
+      return status !== "expired" && status !== "registered";
+    });
+
+    return pickPreferredPass(availablePasses);
+  }
+
+  function getPassApiConfig() {
+    return {
+      mainUrl: config.asbp?.mainUrl || config.asbpApiBaseUrl || config.mainURL || config.apiBaseUrl,
+      externalPassPath: config.asbp?.externalPassPath || "/api/v1/external_pass",
+      rfidPathTemplate: config.asbp?.rfidPathTemplate || "/api/v1/pass/{pass_id}/rfid",
+      token: config.asbp?.terminalToken || config.terminalToken || ""
+    };
+  }
+
+  function getDispenserConfig() {
+    return {
+      cardUrl: config.dispenser?.cardUrl || ""
+    };
+  }
+
+  async function getCardFromDispenser() {
+    const { cardUrl } = getDispenserConfig();
+
+    if (!cardUrl) {
+      throw new Error("Dispenser card URL is not configured.");
+    }
+
+    const token = getPassApiConfig().token;
+
+    const response = await fetch(cardUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json, text/plain"
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error("Dispenser request failed.");
+    }
+
+    const rfid = normalizeRfid(await response.text());
+
+    if (!rfid) {
+      throw new Error("Dispenser returned an empty RFID.");
+    }
+
+    return rfid;
+  }
+
+  async function assignRfidToPass(pass, rfid) {
+    const passId = getPassId(pass);
+    const passApi = getPassApiConfig();
+
+    if (!passId) {
+      throw new Error("Pass ID was not found.");
+    }
+
+    if (!passApi.token) {
+      throw new Error("Terminal token is not configured.");
+    }
+
+    const path = passApi.rfidPathTemplate.replace("{pass_id}", encodeURIComponent(passId));
+    const url = new URL(path, ensureTrailingSlash(passApi.mainUrl));
+    const body = JSON.stringify({ rfid });
+
+    const response = await fetch(url.toString(), {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${passApi.token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body
+    });
+
+    if (!response.ok) {
+      throw new Error("RFID assignment request failed.");
+    }
+  }
+
+  function ensureTrailingSlash(value) {
+    return String(value || "").replace(/\/?$/, "/");
+  }
+
+  async function readJsonResponse(response, label) {
+    const text = await response.text();
+
+    if (!response.ok) {
+      throw new Error(`${label} request failed.`);
+    }
+
+    try {
+      return text ? JSON.parse(text) : null;
+    } catch (error) {
+      throw new Error(`${label} JSON parse failed.`);
+    }
+  }
+
+  function extractPasses(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.results)) return payload.results;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (Array.isArray(payload?.data?.results)) return payload.data.results;
+    if (Array.isArray(payload?.data?.items)) return payload.data.items;
+    if (Array.isArray(payload?.items)) return payload.items;
+    return [];
+  }
+
+  function pickPreferredPass(passes) {
+    const preferredStatuses = new Set(["new", "active"]);
+    return passes.find((pass) => preferredStatuses.has(getPassStatus(pass))) || passes[0] || null;
+  }
+
+  function getPassStatus(pass) {
+    return String(pass?.status || "").toLowerCase();
+  }
+
+  function getPassRfid(pass) {
+    return pass?.rfid || pass?.rfid_code || pass?.card?.rfid || pass?.pass_info?.rfid || "";
+  }
+
+  function getPassId(pass) {
+    return pass?.id || pass?.pass_id || pass?.external_pass_id || pass?.data?.id || "";
+  }
+
+  function normalizeRfid(value) {
+    return String(value || "").trim().replace(/^"+|"+$/g, "");
+  }
+
+  function onlyDigits(value) {
+    return String(value || "").replace(/\D/g, "");
+  }
+
+  function setPassStatus(message, tone) {
+    passStatusMessage.hidden = false;
+    passStatusMessage.textContent = message;
+    passStatusMessage.className = `pass-status${tone ? ` is-${tone}` : ""}`;
+  }
+
+  function resetPassStatus() {
+    passStatusMessage.hidden = true;
+    passStatusMessage.textContent = "";
+    passStatusMessage.className = "pass-status";
   }
 
   function addMetaRow(label, value) {
@@ -405,7 +638,9 @@
 
   async function resetToScan() {
     activeJobId = null;
+    lastPassportData = null;
     clearJobPolling();
+    resetPassStatus();
     showScreen("scan");
     try {
       await startCamera();
@@ -416,6 +651,7 @@
 
   async function resetSession() {
     activeJobId = null;
+    lastPassportData = null;
     clearJobPolling();
     await stopCamera();
     consentInput.checked = false;
@@ -473,7 +709,7 @@
   retakeButton.addEventListener("click", resetToScan);
   errorRetakeButton.addEventListener("click", resetToScan);
   errorHomeButton.addEventListener("click", resetSession);
-  confirmButton.addEventListener("click", resetSession);
+  confirmButton.addEventListener("click", receivePass);
 
   ["pointerdown", "keydown", "touchstart"].forEach((eventName) => {
     window.addEventListener(eventName, (event) => {
