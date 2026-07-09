@@ -59,16 +59,14 @@
   const genericRecognitionError = "Не удалось распознать, попробуйте ещё раз.";
   const terminalStatuses = new Set(["done", "failed", "timeout", "cancelled"]);
 
-  const fieldLabels = [
-    ["surname", "Фамилия"],
-    ["name", "Имя"],
-    ["patronymic", "Отчество"],
-    ["sex", "Пол"],
-    ["date_of_birth", "Дата рождения"],
-    ["passport_series", "Серия"],
-    ["passport_number", "Номер"],
-    ["mrz_line1", "MRZ строка 1", true],
-    ["mrz_line2", "MRZ строка 2", true]
+  const resultCards = [
+    { fields: [["surname", "Фамилия"]] },
+    { fields: [["name", "Имя"]] },
+    { fields: [["patronymic", "Отчество"]] },
+    { fields: [["sex", "Пол"], ["date_of_birth", "Дата рождения"]], split: true },
+    { fields: [["passport_series", "Серия"], ["passport_number", "Номер"]], split: true },
+    { fields: [["mrz_line1", "MRZ строка 1"]], wide: true },
+    { fields: [["mrz_line2", "MRZ строка 2"]], wide: true }
   ];
 
   function showScreen(name) {
@@ -328,19 +326,14 @@
   function renderResult(payload) {
     const data = getPassport(payload);
     const meta = getResponseMeta(payload);
-    const task = getTask(payload);
     lastPassportData = data;
     resetPassStatus();
 
     resultFields.innerHTML = "";
-    fieldLabels.forEach(([key, label, wide]) => {
+    resultCards.forEach((cardConfig) => {
       const card = document.createElement("div");
-      card.className = `field-card${wide ? " wide" : ""}`;
-      const value = data[key] || "Не распознано";
-      card.innerHTML = `
-        <div class="field-name">${label}</div>
-        <div class="field-value${data[key] ? "" : " empty"}">${escapeHtml(value)}</div>
-      `;
+      card.className = `field-card${cardConfig.wide ? " wide" : ""}${cardConfig.split ? " split" : ""}`;
+      card.innerHTML = cardConfig.fields.map(([key, label]) => renderField(data, key, label)).join("");
       resultFields.append(card);
     });
 
@@ -349,9 +342,17 @@
 
     resultMeta.innerHTML = "";
     addMetaRow("Время", meta.processing_time_ms ? `${Math.round(meta.processing_time_ms / 1000)} сек.` : "нет данных");
-    addMetaRow("Источник", meta.source || "нет данных");
-    addMetaRow("Качество", imageQualityText(meta.image_quality));
-    addMetaRow("Задача", (task?.job_id || getJobId(payload)).slice(0, 8));
+  }
+
+  function renderField(data, key, label) {
+    const value = data[key] || "Не распознано";
+
+    return `
+      <div class="field-pair">
+        <div class="field-name">${label}</div>
+        <div class="field-value${data[key] ? "" : " empty"}">${escapeHtml(value)}</div>
+      </div>
+    `;
   }
 
   async function receivePass() {
