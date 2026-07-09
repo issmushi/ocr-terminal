@@ -22,6 +22,7 @@ const defaultConfig = {
   maxFileSizeMb: 75,
   sessionTimeoutMs: 120000,
   idleWarningMs: 90000,
+  successReturnMs: 10000,
   camera: {
     preferredFacingMode: "environment",
     width: 1280,

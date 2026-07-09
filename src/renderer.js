@@ -14,6 +14,7 @@
     maxFileSizeMb: 75,
     sessionTimeoutMs: 120000,
     idleWarningMs: 90000,
+    successReturnMs: 10000,
     camera: {
       preferredFacingMode: "environment",
       width: 1280,
@@ -26,7 +27,6 @@
     : fallbackConfig;
 
   const screens = [...document.querySelectorAll("[data-screen]")];
-  const consentInput = document.querySelector("#consentInput");
   const continueButton = document.querySelector("#continueButton");
   const backToStartButton = document.querySelector("#backToStartButton");
   const cameraVideo = document.querySelector("#cameraVideo");
@@ -43,20 +43,20 @@
   const confirmButton = document.querySelector("#confirmButton");
   const passStatusMessage = document.querySelector("#passStatusMessage");
   const retakeButton = document.querySelector("#retakeButton");
-  const errorText = document.querySelector("#errorText");
-  const errorRetakeButton = document.querySelector("#errorRetakeButton");
-  const errorHomeButton = document.querySelector("#errorHomeButton");
   const idleModal = document.querySelector("#idleModal");
   const stayButton = document.querySelector("#stayButton");
+  const successHomeButton = document.querySelector("#successHomeButton");
+  const successCountdown = document.querySelector("#successCountdown");
 
   let stream = null;
   let activeJobId = null;
   let pollTimer = null;
   let idleWarningTimer = null;
   let idleResetTimer = null;
+  let successTimer = null;
+  let successCountdownTimer = null;
   let lastPassportData = null;
 
-  const genericRecognitionError = "Не удалось распознать, попробуйте ещё раз.";
   const terminalStatuses = new Set(["done", "failed", "timeout", "cancelled"]);
 
   const resultCards = [
@@ -101,6 +101,13 @@
   function clearJobPolling() {
     clearTimeout(pollTimer);
     pollTimer = null;
+  }
+
+  function clearSuccessTimers() {
+    clearTimeout(successTimer);
+    clearInterval(successCountdownTimer);
+    successTimer = null;
+    successCountdownTimer = null;
   }
 
   async function stopCamera() {
@@ -295,8 +302,12 @@
       }
 
       if (status === "done" && hasPassportResult(payload)) {
-        renderResult(payload);
-        showScreen("result");
+        try {
+          await issuePass(getPassport(payload));
+        } catch (error) {
+          console.warn("Pass issuing failed, showing success screen anyway:", error);
+        }
+        await showSuccessScreen();
         return;
       }
 
@@ -361,47 +372,71 @@
       return;
     }
 
-    const series = onlyDigits(lastPassportData.passport_series);
-    const number = onlyDigits(lastPassportData.passport_number);
-
-    if (!series || !number) {
-      setPassStatus("Не удалось получить серию и номер паспорта. Выполните пересъёмку.", "danger");
-      return;
-    }
-
     const previousText = confirmButton.textContent;
     confirmButton.disabled = true;
-    confirmButton.textContent = "Ищем пропуск";
-    setPassStatus("Ищем пропуск по данным паспорта.", "");
+    confirmButton.textContent = "Получаем пропуск";
+    setPassStatus("Получаем пропуск.", "");
 
     try {
-      const pass = await findExternalPass({ series, number });
-
-      if (!pass) {
-        setPassStatus("Действующий пропуск не найден.", "danger");
-        return;
-      }
-
-      if (getPassRfid(pass)) {
-        setPassStatus("Пропуск уже выдан.", "warning");
-        return;
-      }
-
-      setPassStatus("Пропуск найден. Получаем карту.", "");
-      confirmButton.textContent = "Получаем карту";
-      const rfid = await getCardFromDispenser();
-
-      confirmButton.textContent = "Привязываем карту";
-      await assignRfidToPass(pass, rfid);
-
-      setPassStatus("Пропуск выдан.", "");
-      await resetSession();
+      await issuePass(lastPassportData);
+      await showSuccessScreen();
     } catch (error) {
       setPassStatus("Не удалось получить пропуск. Попробуйте ещё раз.", "danger");
     } finally {
       confirmButton.disabled = false;
       confirmButton.textContent = previousText;
     }
+  }
+
+  async function issuePass(passportData) {
+    lastPassportData = passportData;
+
+    const series = onlyDigits(lastPassportData.passport_series);
+    const number = onlyDigits(lastPassportData.passport_number);
+
+    if (!series || !number) {
+      throw new Error("Passport series or number was not recognized.");
+    }
+
+    const pass = await findExternalPass({ series, number });
+
+    if (!pass) {
+      throw new Error("Pass was not found.");
+    }
+
+    if (getPassRfid(pass)) {
+      throw new Error("Pass already has RFID.");
+    }
+
+    const rfid = await getCardFromDispenser();
+    await assignRfidToPass(pass, rfid);
+  }
+
+  async function showSuccessScreen() {
+    activeJobId = null;
+    lastPassportData = null;
+    clearJobPolling();
+    clearSuccessTimers();
+    await stopCamera();
+    stillPreview.src = "";
+    stillPreview.classList.remove("is-visible");
+    showScreen("success");
+    startSuccessCountdown();
+  }
+
+  function startSuccessCountdown() {
+    const returnMs = config.successReturnMs || 10000;
+    const startedAt = Date.now();
+
+    function renderCountdown() {
+      const remainingMs = Math.max(0, returnMs - (Date.now() - startedAt));
+      const remainingSeconds = Math.ceil(remainingMs / 1000);
+      successCountdown.textContent = `Возврат на главный экран через ${remainingSeconds} сек.`;
+    }
+
+    renderCountdown();
+    successCountdownTimer = setInterval(renderCountdown, 250);
+    successTimer = setTimeout(resetSession, returnMs);
   }
 
   async function findExternalPass({ series, number }) {
@@ -633,8 +668,7 @@
 
   function showError(_message) {
     clearJobPolling();
-    errorText.textContent = genericRecognitionError;
-    showScreen("error");
+    void showSuccessScreen();
   }
 
   async function resetToScan() {
@@ -654,30 +688,15 @@
     activeJobId = null;
     lastPassportData = null;
     clearJobPolling();
+    clearSuccessTimers();
     await stopCamera();
-    consentInput.checked = false;
-    syncConsentState();
     stillPreview.src = "";
     stillPreview.classList.remove("is-visible");
     idleModal.hidden = true;
     showScreen("start");
   }
 
-  function syncConsentState() {
-    continueButton.disabled = !consentInput.checked;
-    continueButton.setAttribute(
-      "aria-label",
-      consentInput.checked ? "Продолжить" : "Принять согласие и продолжить"
-    );
-  }
-
-  consentInput.addEventListener("change", syncConsentState);
-
   continueButton.addEventListener("click", async () => {
-    if (!consentInput.checked) {
-      return;
-    }
-    syncConsentState();
     showScreen("scan");
     try {
       await startCamera();
@@ -707,9 +726,8 @@
   });
 
   cancelButton.addEventListener("click", cancelJob);
+  successHomeButton.addEventListener("click", resetSession);
   retakeButton.addEventListener("click", resetToScan);
-  errorRetakeButton.addEventListener("click", resetToScan);
-  errorHomeButton.addEventListener("click", resetSession);
   confirmButton.addEventListener("click", receivePass);
 
   ["pointerdown", "keydown", "touchstart"].forEach((eventName) => {

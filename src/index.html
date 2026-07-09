@@ -9,49 +9,11 @@
   <body>
     <main class="app-shell" aria-live="polite">
       <section class="screen screen-start is-active" data-screen="start">
-        <div class="brand-panel">
-          <div>
-            <h1>Стойка самообслуживания</h1>
-          </div>
-        </div>
-
-        <div class="start-layout">
-          <div class="instruction-panel">
-            <h2>Сканирование паспорта РФ</h2>
-            <p>
-              Разместите разворот паспорта перед фото-сканером. После распознавания
-              проверьте ФИО, дату рождения, серию и номер документа.
-            </p>
-
-            <ol class="steps-list">
-              <li>Подтвердите согласие на обработку персональных данных.</li>
-              <li>Разместите паспорт перед камерой на экране сканирования.</li>
-              <li>Нажмите «Сканировать» и дождитесь результата OCR.</li>
-              <li>Подтвердите данные или выполните пересъёмку.</li>
-            </ol>
-          </div>
-
-          <div class="consent-panel">
-            <h2>Согласие</h2>
-            <p class="consent-text">
-              Я даю согласие оператору терминала на обработку персональных данных,
-              содержащихся в паспорте РФ: ФИО, даты рождения, пола, серии и номера
-              паспорта, а также изображения документа. Обработка выполняется с целью
-              распознавания и проверки данных для текущего сценария обслуживания и
-              включает получение, запись, хранение на время сессии, использование,
-              удаление и уничтожение данных. Согласие действует до завершения текущей
-              сессии и может быть отозвано прекращением работы с терминалом.
-            </p>
-
-            <label class="consent-check">
-              <input id="consentInput" type="checkbox" />
-              <span>Я даю согласие на обработку персональных данных</span>
-            </label>
-
-            <button id="continueButton" class="primary-action" type="button" disabled>
-              Продолжить
-            </button>
-          </div>
+        <div class="start-hero">
+          <h1>Стойка самообслуживания</h1>
+          <button id="continueButton" class="primary-action hero-action" type="button">
+            Получить пропуск
+          </button>
         </div>
       </section>
 
@@ -125,17 +87,14 @@
         </div>
       </section>
 
-      <section class="screen" data-screen="error">
-        <div class="error-layout">
-          <h1 id="errorText">Не удалось распознать, попробуйте ещё раз.</h1>
-          <div class="error-actions">
-            <button id="errorRetakeButton" class="primary-action" type="button">
-              Переснять
-            </button>
-            <button id="errorHomeButton" class="secondary-action" type="button">
-              На старт
-            </button>
-          </div>
+      <section class="screen" data-screen="success">
+        <div class="success-layout">
+          <h1>Спасибо</h1>
+          <p>Вы получили пропуск</p>
+          <button id="successHomeButton" class="primary-action" type="button">
+            Вернуться на главное
+          </button>
+          <span id="successCountdown" class="success-countdown"></span>
         </div>
       </section>
     </main>

@@ -68,7 +68,8 @@ button:disabled {
 }
 
 .screen-start {
-  gap: 38px;
+  justify-content: center;
+  align-items: center;
 }
 
 .brand-panel,
@@ -138,6 +139,36 @@ li {
   flex: 1;
 }
 
+.start-hero,
+.success-layout {
+  display: flex;
+  width: min(760px, 100%);
+  margin: auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 34px;
+  text-align: center;
+}
+
+.start-hero h1,
+.success-layout h1 {
+  font-size: 58px;
+}
+
+.success-layout p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.success-countdown {
+  color: var(--muted);
+  font-size: 24px;
+  font-weight: 700;
+}
+
 .instruction-panel,
 .consent-panel,
 .scan-controls,
@@ -188,11 +219,6 @@ li {
   accent-color: var(--accent);
 }
 
-#consentInput {
-  width: 42px;
-  height: 42px;
-}
-
 .primary-action,
 .secondary-action,
 .ghost-button {
@@ -215,10 +241,16 @@ li {
 
 #continueButton,
 #scanButton,
-#confirmButton {
+#confirmButton,
+#successHomeButton {
   min-height: 96px;
   padding: 24px 32px;
   font-size: 33px;
+}
+
+.hero-action {
+  min-height: 144px;
+  font-size: 44px;
 }
 
 .secondary-action {
@@ -546,7 +578,7 @@ li {
   }
 
   .screen-start {
-    gap: 24px;
+    justify-content: center;
   }
 
   .brand-panel {
@@ -566,6 +598,15 @@ li {
 
   h1 {
     font-size: 40px;
+  }
+
+  .start-hero h1,
+  .success-layout h1 {
+    font-size: 46px;
+  }
+
+  .success-layout p {
+    font-size: 34px;
   }
 
   h2 {
