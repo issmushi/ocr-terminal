@@ -188,6 +188,11 @@ li {
   accent-color: var(--accent);
 }
 
+#consentInput {
+  width: 42px;
+  height: 42px;
+}
+
 .primary-action,
 .secondary-action,
 .ghost-button {
@@ -206,6 +211,14 @@ li {
 
 .primary-action:hover:not(:disabled) {
   background: var(--accent-strong);
+}
+
+#continueButton,
+#scanButton,
+#confirmButton {
+  min-height: 96px;
+  padding: 24px 32px;
+  font-size: 33px;
 }
 
 .secondary-action {
